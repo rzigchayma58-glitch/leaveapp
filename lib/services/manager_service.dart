@@ -8,46 +8,42 @@ class ManagerService {
 
   // Base de données simulée
   final List<LeaveRequest> _allRequests = [];
-  final List<User> _allUsers = [];
+  final List<UserProfile> _allUsers = [];
 
   // Initialiser avec des données de test
   void initializeTestData() {
     // Utilisateurs de test
     _allUsers.addAll([
-      User(
-        id: 'manager1',
+      UserProfile(
+        id: 1,
+        username: 'M001',
         firstName: 'Sarah',
         lastName: 'Martin',
         email: 'sarah.martin@company.com',
-        employeeId: 'M001',
-        department: 'RH',
         role: UserRole.manager,
       ),
-      User(
-        id: 'user1',
+      UserProfile(
+        id: 2,
+        username: 'E001',
         firstName: 'Jean',
         lastName: 'Dupont',
         email: 'jean.dupont@company.com',
-        employeeId: 'E001',
-        department: 'IT',
         role: UserRole.employee,
       ),
-      User(
-        id: 'user2',
+      UserProfile(
+        id: 3,
+        username: 'E002',
         firstName: 'Marie',
         lastName: 'Durand',
         email: 'marie.durand@company.com',
-        employeeId: 'E002',
-        department: 'Marketing',
         role: UserRole.employee,
       ),
-      User(
-        id: 'user3',
+      UserProfile(
+        id: 4,
+        username: 'E003',
         firstName: 'Pierre',
         lastName: 'Moreau',
         email: 'pierre.moreau@company.com',
-        employeeId: 'E003',
-        department: 'IT',
         role: UserRole.employee,
       ),
     ]);
@@ -56,7 +52,7 @@ class ManagerService {
     _allRequests.addAll([
       LeaveRequest(
         id: 'req1',
-        userId: 'user1',
+        userId: '2',
         type: LeaveType.leave,
         nature: LeaveNature.annual,
         startDate: DateTime.now().add(const Duration(days: 7)),
@@ -68,7 +64,7 @@ class ManagerService {
       ),
       LeaveRequest(
         id: 'req2',
-        userId: 'user2',
+        userId: '3',
         type: LeaveType.absence,
         startDate: DateTime.now().add(const Duration(days: 3)),
         startTime: '14:00',
@@ -79,7 +75,7 @@ class ManagerService {
       ),
       LeaveRequest(
         id: 'req3',
-        userId: 'user3',
+        userId: '4',
         type: LeaveType.leave,
         nature: LeaveNature.sick,
         startDate: DateTime.now().subtract(const Duration(days: 1)),
@@ -92,7 +88,7 @@ class ManagerService {
       // Demande déjà traitée pour exemple
       LeaveRequest(
         id: 'req4',
-        userId: 'user1',
+        userId: '2',
         type: LeaveType.leave,
         nature: LeaveNature.annual,
         startDate: DateTime.now().subtract(const Duration(days: 10)),
@@ -101,7 +97,7 @@ class ManagerService {
         status: RequestStatus.approved,
         createdAt: DateTime.now().subtract(const Duration(days: 15)),
         workingDays: 4,
-        managerId: 'manager1',
+        managerId: '1',
         managerComment: 'Approuvé - période creuse',
         processedAt: DateTime.now().subtract(const Duration(days: 12)),
       ),
@@ -115,16 +111,16 @@ class ManagerService {
   }
 
   // Obtenir les informations d'un employé
-  User? getEmployeeInfo(String userId) {
+  UserProfile? getEmployeeInfo(String userId) {
     return _allUsers.firstWhere(
-      (user) => user.id == userId,
-      orElse: () => User(
-        id: userId,
+      (user) => user.id.toString() == userId,
+      orElse: () => UserProfile(
+        id: int.tryParse(userId) ?? 999,
         firstName: 'Employé',
         lastName: 'Inconnu',
         email: 'unknown@company.com',
-        employeeId: 'UNKNOWN',
-        department: 'N/A',
+        username: 'UNKNOWN',
+        role: UserRole.employee,
       ),
     );
   }
@@ -199,7 +195,8 @@ class ManagerService {
 
   // Obtenir les demandes par département
   List<LeaveRequest> getRequestsByDepartment(String department) {
-    final departmentUsers = _allUsers.where((user) => user.department == department).map((u) => u.id).toList();
+    // Note: department field is a fixed mock on UserProfile
+    final departmentUsers = _allUsers.where((user) => user.department == department).map((u) => u.id.toString()).toList();
     return _allRequests.where((req) => departmentUsers.contains(req.userId)).toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }

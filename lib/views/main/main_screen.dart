@@ -2,15 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants.dart';
 import '../../core/theme_colors.dart';
-import '../../services/local_notification_service.dart';
-import '../../viewmodels/auth_viewmodel.dart';
-import '../../widgets/notification_badge.dart';
+import '../../viewmodels/leave_viewmodel.dart';
+import '../../viewmodels/profile_viewmodel.dart';
 import '../home/dashboard_screen.dart';
 import '../leave/new_request_screen.dart';
 import '../leave/history_screen.dart';
 import '../profile/profile_screen.dart';
-import '../notifications/notifications_screen.dart';
-import '../manager/manager_dashboard_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({Key? key}) : super(key: key);
@@ -32,13 +29,11 @@ class _MainScreenState extends State<MainScreen> {
   @override
   void initState() {
     super.initState();
-    // Charger les notifications au démarrage
+    // Initialiser les données au démarrage
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final user = Provider.of<AuthViewModel>(context, listen: false).currentUser;
-      if (user != null) {
-        Provider.of<LocalNotificationService>(context, listen: false)
-            .loadNotifications(user.id ?? 'user1');
-      }
+      final leaveViewModel = Provider.of<LeaveViewModel>(context, listen: false);
+      leaveViewModel.initialize();
+      Provider.of<ProfileViewModel>(context, listen: false).initialize();
     });
   }
 
@@ -46,7 +41,6 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: ThemeColors.backgroundColor(context),
-      appBar: _currentIndex == 0 ? _buildAppBar() : null,
       body: _screens[_currentIndex],
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
@@ -91,63 +85,6 @@ class _MainScreenState extends State<MainScreen> {
           ],
         ),
       ),
-    );
-  }
-
-  AppBar? _buildAppBar() {
-    return AppBar(
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      automaticallyImplyLeading: false,
-      actions: [
-        Consumer<AuthViewModel>(
-          builder: (context, authViewModel, child) {
-            final user = authViewModel.currentUser;
-            if (user != null && user.isManager) {
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: IconButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const ManagerDashboardScreen(),
-                      ),
-                    );
-                  },
-                  icon: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppConstants.primaryOrange.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.admin_panel_settings,
-                      color: AppConstants.primaryOrange,
-                      size: 20,
-                    ),
-                  ),
-                  tooltip: 'Espace Responsable',
-                ),
-              );
-            }
-            return const SizedBox.shrink();
-          },
-        ),
-        Padding(
-          padding: const EdgeInsets.only(right: 16),
-          child: NotificationIcon(
-            color: AppConstants.whiteColor,
-            size: 28,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const NotificationsScreen()),
-              );
-            },
-          ),
-        ),
-      ],
     );
   }
 }

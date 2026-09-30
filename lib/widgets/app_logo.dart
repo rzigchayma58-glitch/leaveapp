@@ -32,21 +32,15 @@ class AppLogo extends StatelessWidget {
               ),
             ],
           ),
-          child: const Icon(
-            Icons.close,
-            color: AppConstants.primaryOrange,
-            size: 40,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.asset(
+              'assets/images/Xtensus2.png',
+              width: size,
+              height: size,
+              fit: BoxFit.contain,
+            ),
           ),
-          // Quand le logo sera ajouté, remplacer par :
-          // child: ClipRRect(
-          //   borderRadius: BorderRadius.circular(12),
-          //   child: Image.asset(
-          //     'assets/images/logo.png',
-          //     width: size,
-          //     height: size,
-          //     fit: BoxFit.contain,
-          //   ),
-          // ),
         ),
         if (showText) ...[
           const SizedBox(height: 16),

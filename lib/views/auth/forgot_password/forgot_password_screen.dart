@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants.dart';
 import '../../../core/theme_colors.dart';
-import '../../../widgets/custom_text_field.dart';
-import '../../../widgets/custom_button.dart';
+import '../../../core/saas_design.dart';
+import '../../../core/animations.dart';
 import '../../../viewmodels/auth_viewmodel.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -27,26 +27,25 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     if (value == null || value.isEmpty) {
       return 'Veuillez saisir votre email';
     }
-    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+    if (!RegExp(r'^[\w.-]+@([\w-]+\.)+[\w-]{2,}$').hasMatch(value)) {
       return 'Veuillez saisir un email valide';
     }
     return null;
   }
 
-  void _handleResetPassword() async {
-    if (_formKey.currentState!.validate()) {
-      final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
-      final success = await authViewModel.resetPassword(_emailController.text.trim());
-
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Lien de réinitialisation envoyé par email'),
-            backgroundColor: AppConstants.primaryOrange,
-          ),
-        );
-        Navigator.pop(context);
-      }
+  Future<void> _handleResetPassword() async {
+    if (!_formKey.currentState!.validate()) return;
+    final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
+    final success = await authViewModel.resetPassword(_emailController.text.trim());
+    if (!mounted) return;
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Demande envoyée. Vérifiez votre email si le serveur le prend en charge.'),
+          backgroundColor: AppConstants.primaryOrange,
+        ),
+      );
+      Navigator.pop(context);
     }
   }
 
@@ -57,17 +56,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       appBar: AppBar(
         title: Text(
           AppConstants.forgotPasswordTitle,
-          style: TextStyle(
-            color: ThemeColors.textColor(context),
-          ),
+          style: TextStyle(color: ThemeColors.textColor(context)),
         ),
         backgroundColor: ThemeColors.appBarColor(context),
         elevation: 0,
         leading: IconButton(
-          icon: Icon(
-            Icons.arrow_back,
-            color: ThemeColors.textColor(context),
-          ),
+          icon: Icon(Icons.arrow_back, color: ThemeColors.textColor(context)),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -80,8 +74,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 const SizedBox(height: 60),
-                
-                // Icône de sécurité
                 Container(
                   width: 80,
                   height: 80,
@@ -89,16 +81,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     color: AppConstants.primaryOrange,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(
-                    Icons.lock,
-                    color: AppConstants.whiteColor,
-                    size: 40,
-                  ),
+                  child: const Icon(Icons.lock, color: AppConstants.whiteColor, size: 40),
                 ),
-                
                 const SizedBox(height: 32),
-                
-                // Titre
                 Text(
                   AppConstants.passwordRecovery,
                   style: TextStyle(
@@ -108,10 +93,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   ),
                   textAlign: TextAlign.center,
                 ),
-                
                 const SizedBox(height: 16),
-                
-                // Description
                 Text(
                   AppConstants.passwordRecoverySubtitle,
                   style: TextStyle(
@@ -120,25 +102,34 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   ),
                   textAlign: TextAlign.center,
                 ),
-                
                 const SizedBox(height: 40),
-                
-                // Champ email
-                CustomTextField(
-                  label: AppConstants.email,
-                  hintText: AppConstants.emailPlaceholder,
-                  controller: _emailController,
-                  validator: _validateEmail,
-                  keyboardType: TextInputType.emailAddress,
-                  prefixIcon: const Icon(
-                    Icons.email_outlined,
-                    color: AppConstants.greyColor,
-                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      AppConstants.email.toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFFE8E8E8),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: SaaSDesign.spacing8),
+                    TextFormField(
+                      controller: _emailController,
+                      validator: _validateEmail,
+                      keyboardType: TextInputType.emailAddress,
+                      cursorColor: SaaSDesign.primaryOrange,
+                      style: SaaSDesign.fieldTextStyle,
+                      decoration: SaaSDesign.fieldDecoration(
+                        hintText: AppConstants.emailPlaceholder,
+                        prefixIcon: Icons.email_outlined,
+                      ),
+                    ),
+                  ],
                 ),
-                
                 const SizedBox(height: 32),
-                
-                // Bouton d'envoi
                 Consumer<AuthViewModel>(
                   builder: (context, authViewModel, child) {
                     return Column(
@@ -148,9 +139,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                             margin: const EdgeInsets.only(bottom: 16),
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: Colors.red.withOpacity(0.1),
+                              color: Colors.red.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.red.withOpacity(0.3)),
+                              border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
                             ),
                             child: Row(
                               children: [
@@ -165,17 +156,19 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                               ],
                             ),
                           ),
-                        CustomButton(
-                          text: AppConstants.sendLink,
-                          onPressed: _handleResetPassword,
-                          isLoading: authViewModel.isLoading,
+                        SizedBox(
+                          width: double.infinity,
+                          child: AnimatedSaaSButton(
+                            text: AppConstants.sendLink,
+                            onPressed: _handleResetPassword,
+                            isLoading: authViewModel.isLoading,
+                            icon: Icons.send,
+                          ),
                         ),
                       ],
                     );
                   },
                 ),
-                
-                const SizedBox(height: 40),
               ],
             ),
           ),

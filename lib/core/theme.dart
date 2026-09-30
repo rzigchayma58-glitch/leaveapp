@@ -170,8 +170,8 @@ class AppTheme {
       // Input Decoration Theme
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppConstants.darkInputFillColor,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        fillColor: Color(0xFF0A0A0A),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: AppConstants.darkBorderColor),
@@ -198,7 +198,7 @@ class AppTheme {
           fontWeight: FontWeight.w500,
         ),
         hintStyle: const TextStyle(
-          color: AppConstants.darkSecondaryTextColor,
+          color: Color(0xFFC8C8C8),
           fontSize: 16,
         ),
       ),

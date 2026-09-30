@@ -5,42 +5,30 @@ import 'core/constants.dart';
 import 'viewmodels/auth_viewmodel.dart';
 import 'viewmodels/leave_viewmodel.dart';
 import 'viewmodels/manager_viewmodel.dart';
+import 'viewmodels/profile_viewmodel.dart';
 import 'services/theme_service.dart';
-import 'services/local_notification_service.dart';
+import 'services/notification_service.dart';
 import 'views/auth/login/login_screen.dart';
+import 'views/main/main_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Initialize local notification service
-  final localNotificationService = LocalNotificationService();
-  await localNotificationService.initialize();
-  
-  runApp(MyApp(localNotificationService: localNotificationService));
+  await NotificationService.init();
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  final LocalNotificationService localNotificationService;
-  
-  const MyApp({Key? key, required this.localNotificationService}) : super(key: key);
+  const MyApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthViewModel()),
-        ChangeNotifierProvider(create: (_) {
-          final leaveViewModel = LeaveViewModel();
-          leaveViewModel.setNotificationService(localNotificationService);
-          return leaveViewModel;
-        }),
-        ChangeNotifierProvider(create: (_) {
-          final managerViewModel = ManagerViewModel();
-          managerViewModel.setNotificationService(localNotificationService);
-          return managerViewModel;
-        }),
+        ChangeNotifierProvider(create: (_) => AuthViewModel()..initialize()),
+        ChangeNotifierProvider(create: (_) => ProfileViewModel()),
+        ChangeNotifierProvider(create: (_) => LeaveViewModel()),
+        ChangeNotifierProvider(create: (_) => ManagerViewModel()),
         ChangeNotifierProvider(create: (_) => ThemeService()),
-        ChangeNotifierProvider.value(value: localNotificationService),
       ],
       child: Consumer<ThemeService>(
         builder: (context, themeService, child) {
@@ -50,7 +38,14 @@ class MyApp extends StatelessWidget {
             darkTheme: AppTheme.darkTheme,
             themeMode: themeService.themeMode,
             debugShowCheckedModeBanner: false,
-            home: const LoginScreen(),
+            home: Consumer<AuthViewModel>(
+              builder: (context, authViewModel, child) {
+                if (authViewModel.isLoggedIn) {
+                  return const MainScreen();
+                }
+                return const LoginScreen();
+              },
+            ),
           );
         },
       ),

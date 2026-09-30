@@ -65,7 +65,7 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
     );
   }
 
-  Widget _buildEmployeeCard(User? employee) {
+  Widget _buildEmployeeCard(UserProfile? employee) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -444,7 +444,7 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
       final success = await Provider.of<ManagerViewModel>(context, listen: false)
           .approveRequest(
         requestId: widget.request.id!,
-        managerId: user?.id ?? 'manager',
+        managerId: user?.id?.toString() ?? 'manager',
         comment: _commentController.text.trim().isNotEmpty 
             ? _commentController.text.trim() 
             : null,
@@ -458,7 +458,8 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
         _showSuccessMessage('Demande approuvée avec succès');
         Navigator.pop(context);
       } else {
-        _showErrorMessage('Erreur lors de l\'approbation');
+        final error = Provider.of<ManagerViewModel>(context, listen: false).errorMessage;
+        _showErrorMessage(error ?? 'Erreur lors de l\'approbation');
       }
     }
   }
@@ -482,7 +483,7 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
       final success = await Provider.of<ManagerViewModel>(context, listen: false)
           .rejectRequest(
         requestId: widget.request.id!,
-        managerId: user?.id ?? 'manager',
+        managerId: user?.id?.toString() ?? 'manager',
         comment: _commentController.text.trim().isNotEmpty 
             ? _commentController.text.trim() 
             : null,
@@ -496,7 +497,8 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
         _showSuccessMessage('Demande refusée');
         Navigator.pop(context);
       } else {
-        _showErrorMessage('Erreur lors du refus');
+        final error = Provider.of<ManagerViewModel>(context, listen: false).errorMessage;
+        _showErrorMessage(error ?? 'Erreur lors du refus');
       }
     }
   }

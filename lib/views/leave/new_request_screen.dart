@@ -7,6 +7,8 @@ import '../../widgets/custom_button.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/leave_viewmodel.dart';
 import '../../services/file_service.dart';
+import '../../services/leave_service.dart';
+import '../../services/api_config.dart';
 
 class NewRequestScreen extends StatefulWidget {
   const NewRequestScreen({Key? key}) : super(key: key);
@@ -21,18 +23,70 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
   final FileService _fileService = FileService();
   
   LeaveType _selectedType = LeaveType.leave;
-  LeaveNature? _selectedNature = LeaveNature.annual;
+  int? _selectedLeaveTypeId;
   DateTime? _startDate;
   DateTime? _endDate;
   TimeOfDay? _startTime;
   TimeOfDay? _endTime;
   int? _calculatedDays;
   List<AttachedFile> _attachments = [];
+  
+  // 🎯 CACHE POUR LES TYPES DE CONGÉ
+  List<LeaveTypeModel>? _leaveTypes;
+  bool _isLoadingTypes = false;
+  String? _typesError;
+
+  @override
+  void initState() {
+    super.initState();
+    // ⚡ Chargement différé - ne ralentit plus le démarrage
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _loadLeaveTypes();
+      }
+    });
+  }
 
   @override
   void dispose() {
     _commentController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadLeaveTypes({bool forceRefresh = false}) async {
+    if (_isLoadingTypes) return;
+    if (!forceRefresh && _leaveTypes != null && _leaveTypes!.isNotEmpty) return;
+
+    setState(() {
+      _isLoadingTypes = true;
+      _typesError = null;
+    });
+
+    try {
+      print('🔄 Chargement des types de congé depuis le backend...');
+      final types = await LeaveService().getLeaveTypes(forceRefresh: forceRefresh);
+
+      if (!mounted) return;
+      setState(() {
+        _leaveTypes = types;
+        _isLoadingTypes = false;
+        _typesError = null;
+        if (_selectedLeaveTypeId != null &&
+            types.every((type) => type.id != _selectedLeaveTypeId)) {
+          _selectedLeaveTypeId = null;
+        }
+      });
+    } catch (e) {
+      print('⚠️ Erreur chargement types: $e');
+      if (!mounted) return;
+      setState(() {
+        _isLoadingTypes = false;
+        _leaveTypes = [];
+        _typesError = e is ApiException
+            ? e.message
+            : 'Impossible de charger les types de congé. Vérifiez la connexion au serveur.';
+      });
+    }
   }
 
   void _calculateWorkingDays() {
@@ -368,15 +422,18 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
                       : AppConstants.primaryOrange,
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  _attachments.length >= AppConstants.maxAttachments
-                      ? 'Maximum ${AppConstants.maxAttachments} fichiers'
-                      : AppConstants.addAttachment,
-                  style: TextStyle(
-                    color: _attachments.length >= AppConstants.maxAttachments 
-                        ? ThemeColors.secondaryTextColor(context)
-                        : AppConstants.primaryOrange,
-                    fontWeight: FontWeight.w500,
+                Flexible(
+                  child: Text(
+                    _attachments.length >= AppConstants.maxAttachments
+                        ? 'Maximum ${AppConstants.maxAttachments} fichiers'
+                        : AppConstants.addAttachment,
+                    style: TextStyle(
+                      color: _attachments.length >= AppConstants.maxAttachments 
+                          ? ThemeColors.secondaryTextColor(context)
+                          : AppConstants.primaryOrange,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
@@ -551,37 +608,85 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
         }
       }
 
-      final user = Provider.of<AuthViewModel>(context, listen: false).currentUser;
-      if (user == null) return;
-
-      final request = LeaveRequest(
-        userId: user.id ?? 'user1',
-        type: _selectedType,
-        nature: _selectedNature,
-        startDate: _startDate,
-        endDate: _endDate,
-        startTime: _startTime != null ? _formatTime(_startTime) : null,
-        endTime: _endTime != null ? _formatTime(_endTime) : null,
-        comment: _commentController.text.trim().isNotEmpty ? _commentController.text.trim() : null,
-        workingDays: _calculatedDays,
-        attachments: _attachments,
-        createdAt: DateTime.now(),
-      );
-
-      final success = await leaveViewModel.submitRequest(request);
-
-      if (success) {
+      if (_selectedType == LeaveType.leave && _selectedLeaveTypeId == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Demande envoyée avec succès !'),
-            backgroundColor: AppConstants.approvedColor,
+            content: Text('Veuillez sélectionner un type de congé'),
+            backgroundColor: AppConstants.rejectedColor,
+          ),
+        );
+        return;
+      }
+
+      List<LeaveTypeModel> availableTypes = _leaveTypes ?? [];
+      if (availableTypes.isEmpty) {
+        await _loadLeaveTypes(forceRefresh: true);
+        availableTypes = _leaveTypes ?? [];
+      }
+      if (availableTypes.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Types de congé indisponibles. Réessayez dans un instant.'),
+            backgroundColor: AppConstants.rejectedColor,
+          ),
+        );
+        return;
+      }
+
+      late final int leaveTypeId;
+      try {
+        leaveTypeId = LeaveService().resolveLeaveTypeId(
+          types: availableTypes,
+          isAbsence: _selectedType == LeaveType.absence,
+          selectedId: _selectedLeaveTypeId,
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e is ApiException ? e.message : 'Type de congé invalide'),
+            backgroundColor: AppConstants.rejectedColor,
+          ),
+        );
+        return;
+      }
+
+      final success = await leaveViewModel.createLeaveRequest(
+        leaveTypeId: leaveTypeId,
+        startDate: _startDate!,
+        endDate: _endDate ?? _startDate!,
+        reason: _commentController.text.trim().isNotEmpty ? _commentController.text.trim() : null,
+        requestType: _selectedType,
+        startTime: _startTime,
+        endTime: _endTime,
+        attachments: List<AttachedFile>.from(_attachments),
+      );
+
+      if (!success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(leaveViewModel.errorMessage ?? 'La demande n\'a pas pu être envoyée'),
+            backgroundColor: AppConstants.rejectedColor,
+          ),
+        );
+        return;
+      }
+
+      if (success) {
+        final warning = leaveViewModel.attachmentWarning;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(warning ?? 'Demande envoyée avec succès !'),
+            backgroundColor: warning == null
+                ? AppConstants.approvedColor
+                : AppConstants.primaryOrange,
+            duration: Duration(seconds: warning == null ? 3 : 6),
           ),
         );
         
         // Reset form
         setState(() {
           _selectedType = LeaveType.leave;
-          _selectedNature = LeaveNature.annual;
+          _selectedLeaveTypeId = null;
           _startDate = null;
           _endDate = null;
           _startTime = null;
@@ -592,6 +697,115 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
         });
       }
     }
+  }
+
+  // 🎯 DROPDOWN SIMPLE ET PROPRE POUR LES 4 TYPES MYSQL
+  Widget _buildLeaveTypeDropdown() {
+    // Chargement en cours
+    if (_isLoadingTypes) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: ThemeColors.inputFillColor(context),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: ThemeColors.borderColor(context)),
+        ),
+        child: const Row(
+          children: [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2, color: AppConstants.primaryOrange),
+            ),
+            SizedBox(width: 12),
+            Text("Chargement des types..."),
+          ],
+        ),
+      );
+    }
+
+    if (_typesError != null) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: ThemeColors.inputFillColor(context),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppConstants.rejectedColor.withValues(alpha: 0.4)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _typesError!,
+              style: const TextStyle(color: AppConstants.rejectedColor, fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => _loadLeaveTypes(forceRefresh: true),
+              child: const Text('Réessayer'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final availableTypes = (_leaveTypes ?? []).where((type) => !type.isAbsence).toList();
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        DropdownButtonFormField<int>(
+          value: _selectedLeaveTypeId,
+          hint: Text(
+            "Sélectionnez la nature du congé",
+            style: TextStyle(
+              color: ThemeColors.secondaryTextColor(context),
+              fontSize: 14,
+            ),
+          ),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: ThemeColors.inputFillColor(context),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: ThemeColors.borderColor(context)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: ThemeColors.borderColor(context)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppConstants.primaryOrange, width: 2),
+            ),
+          ),
+          items: availableTypes.map((leaveType) {
+            return DropdownMenuItem<int>(
+              value: leaveType.id,
+              child: Text(
+                leaveType.name,
+                style: TextStyle(
+                  color: ThemeColors.textColor(context),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            );
+          }).toList(),
+          onChanged: (int? newId) {
+            setState(() {
+              _selectedLeaveTypeId = newId;
+            });
+            
+            if (newId != null) {
+              final selectedType = availableTypes.firstWhere((type) => type.id == newId);
+              print('🔄 Type sélectionné: ID $newId - ${selectedType.name}');
+            }
+          },
+        ),
+      ],
+    );
   }
 
   @override
@@ -637,10 +851,9 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
                       onTap: () {
                         setState(() {
                           _selectedType = LeaveType.leave;
-                          if (_selectedNature == null) {
-                            _selectedNature = LeaveNature.annual;
-                          }
                         });
+                        // ⚡ Charger les types seulement maintenant
+                        _loadLeaveTypes();
                       },
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -676,8 +889,10 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
                       onTap: () {
                         setState(() {
                           _selectedType = LeaveType.absence;
-                          _selectedNature = null;
+                          _endDate = null;
+                          _calculatedDays = null;
                         });
+                        _loadLeaveTypes();
                       },
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -697,11 +912,13 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
                         child: Center(
                           child: Text(
                             AppConstants.absenceType,
+                            textAlign: TextAlign.center,
                             style: TextStyle(
                               color: _selectedType == LeaveType.absence 
                                   ? AppConstants.whiteColor 
                                   : ThemeColors.textColor(context),
                               fontWeight: FontWeight.w500,
+                              fontSize: 13,
                             ),
                           ),
                         ),
@@ -713,7 +930,7 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
 
               const SizedBox(height: 24),
 
-              // Nature du congé (seulement pour les congés)
+              // Nature du congé (seulement pour les congés, PAS pour autorisation d'absence)
               if (_selectedType == LeaveType.leave) ...[
                 Text(
                   AppConstants.leaveNature,
@@ -727,57 +944,8 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
                 
                 const SizedBox(height: 8),
                 
-                DropdownButtonFormField<LeaveNature>(
-                  value: _selectedNature,
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: ThemeColors.inputFillColor(context),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: ThemeColors.borderColor(context)),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: ThemeColors.borderColor(context)),
-                    ),
-                  ),
-                  items: [
-                    DropdownMenuItem(
-                      value: LeaveNature.annual,
-                      child: Text(
-                        AppConstants.annualLeave,
-                        style: TextStyle(color: ThemeColors.textColor(context)),
-                      ),
-                    ),
-                    DropdownMenuItem(
-                      value: LeaveNature.exceptional,
-                      child: Text(
-                        AppConstants.exceptionalLeave,
-                        style: TextStyle(color: ThemeColors.textColor(context)),
-                      ),
-                    ),
-                    DropdownMenuItem(
-                      value: LeaveNature.sick,
-                      child: Text(
-                        AppConstants.sickLeave,
-                        style: TextStyle(color: ThemeColors.textColor(context)),
-                      ),
-                    ),
-                    DropdownMenuItem(
-                      value: LeaveNature.other,
-                      child: Text(
-                        AppConstants.otherReason,
-                        style: TextStyle(color: ThemeColors.textColor(context)),
-                      ),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedNature = value;
-                    });
-                  },
-                ),
+                // 🎯 DROPDOWN AVEC CACHE LOCAL
+                _buildLeaveTypeDropdown(),
                 
                 const SizedBox(height: 24),
               ],
@@ -910,11 +1078,14 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        const Text(
-                          AppConstants.autoCalculation,
-                          style: TextStyle(
-                            color: AppConstants.primaryOrange,
-                            fontSize: 12,
+                        const Expanded(
+                          child: Text(
+                            AppConstants.autoCalculation,
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              color: AppConstants.primaryOrange,
+                              fontSize: 12,
+                            ),
                           ),
                         ),
                       ],
